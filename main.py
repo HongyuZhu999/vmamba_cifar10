@@ -10,6 +10,10 @@ import torch.nn as nn
 from datetime import datetime
 import os
 
+# Configs for Cifar10
+EPOCHS = 100
+TRAIN_LR = 0.01
+
 
 # CIFAR-10 Data Load
 def load_cifar10(batch_size, data_dir='data/cifar10'):
@@ -20,26 +24,23 @@ def load_cifar10(batch_size, data_dir='data/cifar10'):
     ])
 
     # Load the training, validation, and test sets
-    train_set = torchvision.datasets.CIFAR10(root=data_dir, train=True,
-                                             download=True, transform=transform)
-    train_set, val_set = torch.utils.data.random_split(train_set, [45000, 5000])
-
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size,
-                                               shuffle=True, num_workers=2)
-
-    val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size,
-                                             shuffle=False, num_workers=2)
-
-    test_set = torchvision.datasets.CIFAR10(root=data_dir, train=False,
-                                            download=True, transform=transform)
-    test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size,
-                                              shuffle=False, num_workers=2)
+    train_set = torchvision.datasets.CIFAR10(root=data_dir, train=True, download=True, transform=transform)
+    train_set, val_set = torch.utils.data.random_split(train_set, [48000, 2000])
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, huffle=True, num_workers=2)
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=2)
+    test_set = torchvision.datasets.CIFAR10(root=data_dir, train=False, download=True, transform=transform)
+    test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=2)
     return train_loader, val_loader, test_loader
 
 
 def parse_option():
     parser = argparse.ArgumentParser('Swin Transformer training and evaluation script', add_help=False)
-    parser.add_argument('--cfg', type=str, required=True, metavar="FILE", help='path to config file', )
+    parser.add_argument(
+        '--cfg',
+        type=str, required=True,
+        metavar="FILE",
+        help='path to config file'
+    )
     parser.add_argument(
         "--opts",
         help="Modify config options by adding 'KEY VALUE' pairs. ",
@@ -51,11 +52,10 @@ def parse_option():
     return args, config
 
 
-def setup_training(model, config):
+def setup_training(model):
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=config.TRAIN.BASE_LR, weight_decay=config.TRAIN.WEIGHT_DECAY)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
-    return criterion, optimizer, scheduler
+    optimizer = optim.Adam(model.parameters(), lr=TRAIN_LR)
+    return criterion, optimizer
 
 
 def save_model(model, path):
@@ -64,6 +64,7 @@ def save_model(model, path):
 
 def train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs,
                 folder_name, current_time):
+    model.cuda()
     for epoch in range(num_epochs):
         # Train
         model.train()
@@ -119,10 +120,14 @@ def evaluate_model(model, data_loader, criterion):
 
 
 def main():
+    if torch.cuda.is_available():
+        print("GPU is available!")
+    else:
+        print("GPU is not available. Training will be done on CPU.")
+
     args, config = parse_option()
     model = build_model(config)
     # print(model)
-    model.cuda()
 
     # CIFAR-10
     train_loader, val_loader, test_loader = load_cifar10(config.DATA.BATCH_SIZE, 'data/cifar10')
@@ -134,8 +139,8 @@ def main():
 
     # Train
     print("Start Training")
-    criterion, optimizer, scheduler = setup_training(model, config)
-    train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=100,  # EPOCH change here
+    criterion, optimizer = setup_training(model)
+    train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=EPOCHS,
                 folder_name=folder_name, current_time=current_time)
 
     # eval
