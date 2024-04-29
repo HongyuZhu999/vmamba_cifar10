@@ -7,7 +7,6 @@ from config import get_config
 import argparse
 import torch.optim as optim
 import torch.nn as nn
-import logging
 from datetime import datetime
 import os
 
@@ -94,6 +93,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
     save_model(model, model_file)
     print(f"Model saved in {model_file}")
 
+
 def evaluate_model(model, data_loader, criterion):
     model.eval()
     total_loss = 0.0
@@ -118,24 +118,6 @@ def evaluate_model(model, data_loader, criterion):
     return avg_loss, accuracy
 
 
-# Logging
-def setup_logging(log_file):
-    # 创建日志记录器
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-
-    # 创建文件处理器
-    handler = logging.FileHandler(log_file)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-
-    # 创建终端处理器
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
-
-
 def main():
     args, config = parse_option()
     model = build_model(config)
@@ -145,18 +127,15 @@ def main():
     # CIFAR-10
     train_loader, val_loader, test_loader = load_cifar10(config.DATA.BATCH_SIZE, 'data/cifar10')
 
-    # Record
     # Create model save folder
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     folder_name = f'model_{current_time}'
     os.makedirs(folder_name, exist_ok=True)
-    log_file = f'model_{current_time}/log_{current_time}.txt'
-    setup_logging(log_file)
 
     # Train
     print("Start Training")
     criterion, optimizer, scheduler = setup_training(model, config)
-    train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=5,
+    train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=100,  # EPOCH change here
                 folder_name=folder_name, current_time=current_time)
 
     # eval
