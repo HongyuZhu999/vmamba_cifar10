@@ -7,8 +7,11 @@ from config import get_config
 import argparse
 import torch.optim as optim
 import torch.nn as nn
+import logging
+from datetime import datetime
 
 
+# CIFAR-10 Data Load
 def load_cifar10(batch_size, data_dir='data/cifar10'):
     # Normalize the CIFAR-10 dataset with the mean and standard deviation of CIFAR-10 images
     transform = transforms.Compose([
@@ -16,18 +19,22 @@ def load_cifar10(batch_size, data_dir='data/cifar10'):
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
     ])
 
-    # Load the training and test sets
+    # Load the training, validation, and test sets
     train_set = torchvision.datasets.CIFAR10(root=data_dir, train=True,
                                              download=True, transform=transform)
+    train_set, val_set = torch.utils.data.random_split(train_set, [45000, 5000])
+
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size,
                                                shuffle=True, num_workers=2)
+
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size,
+                                             shuffle=False, num_workers=2)
 
     test_set = torchvision.datasets.CIFAR10(root=data_dir, train=False,
                                             download=True, transform=transform)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size,
                                               shuffle=False, num_workers=2)
-
-    return train_loader, test_loader
+    return train_loader, val_loader, test_loader
 
 
 def parse_option():
@@ -55,9 +62,14 @@ def save_model(model, path):
     torch.save(model.state_dict(), path)
 
 
-def train_model(model, train_loader, criterion, optimizer, num_epochs=10):
-    model.train()
+def train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs):
+    current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f'model_save/log_{current_time}.txt'
+    logging.basicConfig(filename=log_file, level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(message)s')
     for epoch in range(num_epochs):
+        # Train
+        model.train()
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
             inputs, labels = data
@@ -72,9 +84,15 @@ def train_model(model, train_loader, criterion, optimizer, num_epochs=10):
 
             running_loss += loss.item()
             if i % 200 == 199:
-                print(f'Epoch {epoch + 1}: Loss: {running_loss / 200:.3f}')
                 running_loss = 0.0
-    save_model(model, f'model_save/model.pth')
+
+        # Validate
+        val_loss, val_accuracy = evaluate_model(model, val_loader, criterion)
+        print(f'Epoch {epoch + 1}/{num_epochs}: Loss: {running_loss / 200:.3f}, Validation Loss: {val_loss:.3f},'
+              f' Validation Accuracy: {val_accuracy:.2f}%')
+
+    save_model(model, f'model_save/model_{current_time}.pth')
+    print(f"Model saved in model_save/model_{current_time}.pth")
 
 
 def evaluate_model(model, data_loader, criterion):
@@ -104,15 +122,16 @@ def evaluate_model(model, data_loader, criterion):
 def main():
     args, config = parse_option()
     model = build_model(config)
-    print(model)
+    # print(model)
     model.cuda()
 
     # CIFAR-10
-    train_loader, test_loader = load_cifar10(config.DATA.BATCH_SIZE, 'data/cifar10')
+    train_loader, val_loader, test_loader = load_cifar10(config.DATA.BATCH_SIZE, 'data/cifar10')
 
     # Train
+    print("Start Training")
     criterion, optimizer, scheduler = setup_training(model, config)
-    train_model(model, train_loader, criterion, optimizer, num_epochs=5)
+    train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=5)
 
     # eval
     test_loss, test_accuracy = evaluate_model(model, test_loader, criterion)
