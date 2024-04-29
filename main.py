@@ -9,7 +9,7 @@ import torch.optim as optim
 import torch.nn as nn
 import logging
 from datetime import datetime
-
+import os
 
 # CIFAR-10 Data Load
 def load_cifar10(batch_size, data_dir='data/cifar10'):
@@ -63,36 +63,48 @@ def save_model(model, path):
 
 
 def train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs):
-    current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f'model_save/log_{current_time}.txt'
-    logging.basicConfig(filename=log_file, level=logging.INFO,
-                        format='%(asctime)s - %(levelname)s - %(message)s')
-    for epoch in range(num_epochs):
-        # Train
-        model.train()
-        running_loss = 0.0
-        for i, data in enumerate(train_loader, 0):
-            inputs, labels = data
-            inputs, labels = inputs.cuda(), labels.cuda()
+    try:
+        # Create model save folder
+        current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        folder_name = f'model_{current_time}'
+        os.makedirs(folder_name, exist_ok=True)
 
-            optimizer.zero_grad()
+        # Save Log
+        log_file = os.path.join(folder_name, f'log_{current_time}.txt')
+        logging.basicConfig(filename=log_file, level=logging.INFO,
+                            format='%(asctime)s - %(levelname)s - %(message)s')
 
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
+        for epoch in range(num_epochs):
+            # Train
+            model.train()
+            running_loss = 0.0
+            for i, data in enumerate(train_loader, 0):
+                inputs, labels = data
+                inputs, labels = inputs.cuda(), labels.cuda()
 
-            running_loss += loss.item()
-            if i % 200 == 199:
-                running_loss = 0.0
+                optimizer.zero_grad()
 
-        # Validate
-        val_loss, val_accuracy = evaluate_model(model, val_loader, criterion)
-        print(f'Epoch {epoch + 1}/{num_epochs}: Loss: {running_loss / 200:.3f}, Validation Loss: {val_loss:.3f},'
-              f' Validation Accuracy: {val_accuracy:.2f}%')
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
 
-    save_model(model, f'model_save/model_{current_time}.pth')
-    print(f"Model saved in model_save/model_{current_time}.pth")
+                running_loss += loss.item()
+                if i % 200 == 199:
+                    running_loss = 0.0
+
+            # Validate
+            val_loss, val_accuracy = evaluate_model(model, val_loader, criterion)
+            print(f'Epoch {epoch + 1}/{num_epochs}: Loss: {running_loss / 200:.3f}, Validation Loss: {val_loss:.3f},'
+                  f' Validation Accuracy: {val_accuracy:.2f}%')
+
+        # Save model
+        model_file = os.path.join(folder_name, f'model_{current_time}.pth')
+        save_model(model, model_file)
+        print(f"Model saved in {model_file}")
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 
 def evaluate_model(model, data_loader, criterion):
