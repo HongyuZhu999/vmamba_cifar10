@@ -26,7 +26,7 @@ def load_cifar10(batch_size, data_dir='data/cifar10'):
     # Load the training, validation, and test sets
     train_set = torchvision.datasets.CIFAR10(root=data_dir, train=True, download=True, transform=transform)
     train_set, val_set = torch.utils.data.random_split(train_set, [48000, 2000])
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, huffle=True, num_workers=2)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2)
     val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=2)
     test_set = torchvision.datasets.CIFAR10(root=data_dir, train=False, download=True, transform=transform)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=2)
