@@ -11,6 +11,7 @@ import logging
 from datetime import datetime
 import os
 
+
 # CIFAR-10 Data Load
 def load_cifar10(batch_size, data_dir='data/cifar10'):
     # Normalize the CIFAR-10 dataset with the mean and standard deviation of CIFAR-10 images
@@ -54,7 +55,7 @@ def parse_option():
 def setup_training(model, config):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=config.TRAIN.BASE_LR, weight_decay=config.TRAIN.WEIGHT_DECAY)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)  # 示例：每30个epoch减少到原来的0.1倍
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
     return criterion, optimizer, scheduler
 
 
@@ -62,58 +63,44 @@ def save_model(model, path):
     torch.save(model.state_dict(), path)
 
 
-def train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs):
-    try:
-        # Create model save folder
-        current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        folder_name = f'model_{current_time}'
-        os.makedirs(folder_name, exist_ok=True)
+def train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs,
+                folder_name, current_time):
+    for epoch in range(num_epochs):
+        # Train
+        model.train()
+        running_loss = 0.0
+        for i, data in enumerate(train_loader, 0):
+            inputs, labels = data
+            inputs, labels = inputs.cuda(), labels.cuda()
 
-        # Save Log
-        log_file = os.path.join(folder_name, f'log_{current_time}.txt')
-        logging.basicConfig(filename=log_file, level=logging.INFO,
-                            format='%(asctime)s - %(levelname)s - %(message)s')
+            optimizer.zero_grad()
 
-        for epoch in range(num_epochs):
-            # Train
-            model.train()
-            running_loss = 0.0
-            for i, data in enumerate(train_loader, 0):
-                inputs, labels = data
-                inputs, labels = inputs.cuda(), labels.cuda()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
 
-                optimizer.zero_grad()
+            running_loss += loss.item()
+            if i % 200 == 199:
+                running_loss = 0.0
 
-                outputs = model(inputs)
-                loss = criterion(outputs, labels)
-                loss.backward()
-                optimizer.step()
+        # Validate
+        val_loss, val_accuracy = evaluate_model(model, val_loader, criterion)
+        print(f'Epoch {epoch + 1}/{num_epochs}: Loss: {running_loss / 200:.3f}, Validation Loss: {val_loss:.3f},'
+              f' Validation Accuracy: {val_accuracy:.2f}%')
 
-                running_loss += loss.item()
-                if i % 200 == 199:
-                    running_loss = 0.0
-
-            # Validate
-            val_loss, val_accuracy = evaluate_model(model, val_loader, criterion)
-            print(f'Epoch {epoch + 1}/{num_epochs}: Loss: {running_loss / 200:.3f}, Validation Loss: {val_loss:.3f},'
-                  f' Validation Accuracy: {val_accuracy:.2f}%')
-
-        # Save model
-        model_file = os.path.join(folder_name, f'model_{current_time}.pth')
-        save_model(model, model_file)
-        print(f"Model saved in {model_file}")
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
+    # Save model
+    model_file = os.path.join(folder_name, f'model_{current_time}.pth')
+    save_model(model, model_file)
+    print(f"Model saved in {model_file}")
 
 def evaluate_model(model, data_loader, criterion):
-    model.eval()  # 将模型设置为评估模式
+    model.eval()
     total_loss = 0.0
     correct = 0
     total = 0
 
-    with torch.no_grad():  # 在评估过程中不进行梯度计算
+    with torch.no_grad():
         for data in data_loader:
             images, labels = data
             images, labels = images.cuda(), labels.cuda()
@@ -131,6 +118,24 @@ def evaluate_model(model, data_loader, criterion):
     return avg_loss, accuracy
 
 
+# Logging
+def setup_logging(log_file):
+    # 创建日志记录器
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    # 创建文件处理器
+    handler = logging.FileHandler(log_file)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    # 创建终端处理器
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+
 def main():
     args, config = parse_option()
     model = build_model(config)
@@ -140,10 +145,19 @@ def main():
     # CIFAR-10
     train_loader, val_loader, test_loader = load_cifar10(config.DATA.BATCH_SIZE, 'data/cifar10')
 
+    # Record
+    # Create model save folder
+    current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    folder_name = f'model_{current_time}'
+    os.makedirs(folder_name, exist_ok=True)
+    log_file = f'model_{current_time}/log_{current_time}.txt'
+    setup_logging(log_file)
+
     # Train
     print("Start Training")
     criterion, optimizer, scheduler = setup_training(model, config)
-    train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=5)
+    train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=5,
+                folder_name=folder_name, current_time=current_time)
 
     # eval
     test_loss, test_accuracy = evaluate_model(model, test_loader, criterion)
