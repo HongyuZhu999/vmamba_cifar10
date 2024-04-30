@@ -20,6 +20,7 @@ def load_cifar10(batch_size, data_dir='data/cifar10'):
     # Normalize the CIFAR-10 dataset with the mean and standard deviation of CIFAR-10 images
     transform = transforms.Compose([
         transforms.ToTensor(),
+
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
     ])
 
@@ -69,6 +70,8 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
         # Train
         model.train()
         running_loss = 0.0
+        total_batches = 0
+
         for i, data in enumerate(train_loader, 0):
             inputs, labels = data
             inputs, labels = inputs.cuda(), labels.cuda()
@@ -81,12 +84,13 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
             optimizer.step()
 
             running_loss += loss.item()
-            if i % 200 == 199:
-                running_loss = 0.0
+            total_batches += 1
+
+        avg_training_loss = running_loss / total_batches
 
         # Validate
         val_loss, val_accuracy = evaluate_model(model, val_loader, criterion)
-        print(f'Epoch {epoch + 1}/{num_epochs}: Loss: {running_loss / 200:.3f}, Validation Loss: {val_loss:.3f},'
+        print(f'Epoch {epoch + 1}/{num_epochs}: Loss: {avg_training_loss:.3f}, Validation Loss: {val_loss:.3f},'
               f' Validation Accuracy: {val_accuracy:.2f}%')
 
     # Save model
